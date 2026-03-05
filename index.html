@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tower Defense</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg: #0f0e17;
+    --surface: #1a1828;
+    --accent: #f5a623;
+    --accent2: #e8365d;
+    --green: #2ecc71;
+    --blue: #3498db;
+    --purple: #9b59b6;
+    --text: #fffffe;
+    --muted: #a7a9be;
+    --path: #2d2a3e;
+    --grass: #16213e;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Courier New', monospace;
+    height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ---- SCREENS ---- */
+  .screen { display: none; width: 100%; height: 100dvh; flex-direction: column; align-items: center; justify-content: center; }
+  .screen.active { display: flex; }
+
+  /* ---- HERO SELECT ---- */
+  #heroSelect {
+    background: radial-gradient(ellipse at 50% 0%, #1e1b4b 0%, var(--bg) 70%);
+    padding: 20px;
+    gap: 16px;
+  }
+  #heroSelect h1 {
+    font-size: clamp(20px, 5vw, 28px);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    text-shadow: 0 0 20px #f5a62366;
+  }
+  #heroSelect p { color: var(--muted); font-size: 13px; }
+  .hero-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    width: 100%;
+    max-width: 380px;
+  }
+  .hero-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 6px;
+    border: 2px solid #ffffff22;
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface);
+  }
+  .hero-card:hover, .hero-card.selected {
+    border-color: var(--accent);
+    background: #f5a62322;
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px #f5a62333;
+  }
+  .hero-avatar {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #ffffff22;
+    background: #ffffff11;
+    font-size: 24px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .hero-name { font-size: 9px; color: var(--muted); text-align: center; letter-spacing: 1px; }
+  .btn-start {
+    padding: 14px 40px;
+    background: var(--accent);
+    color: #0f0e17;
+    border: none;
+    border-radius: 30px;
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 20px #f5a62344;
+  }
+  .btn-start:hover { transform: scale(1.05); box-shadow: 0 6px 28px #f5a62366; }
+  .btn-start:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* ---- GAME SCREEN ---- */
+  #gameScreen { padding: 0; justify-content: flex-start; }
+
+  /* HUD */
+  #hud {
+    width: 100%;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-bottom: 1px solid #ffffff11;
+    flex-shrink: 0;
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+  .hud-stat {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 13px; white-space: nowrap;
+  }
+  .hud-icon { font-size: 16px; }
+  .hud-val { font-weight: bold; color: var(--accent); min-width: 24px; }
+  .hud-val.red { color: var(--accent2); }
+  .hud-val.blue { color: var(--blue); }
+  #btnWave {
+    padding: 6px 12px;
+    background: var(--green);
+    color: #0f0e17;
+    border: none;
+    border-radius: 20px;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  #btnWave:disabled { background: #555; color: #888; cursor: not-allowed; }
+
+  /* CANVAS */
+  #gameCanvas {
+    display: block;
+    flex: 1;
+    width: 100%;
+    touch-action: none;
+  }
+
+  /* TOOLBAR */
+  #toolbar {
+    width: 100%;
+    background: var(--surface);
+    border-top: 1px solid #ffffff11;
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding: 8px 8px;
+    flex-shrink: 0;
+    gap: 6px;
+  }
+  .turret-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px 10px;
+    border: 2px solid #ffffff22;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 9px;
+    flex: 1;
+  }
+  .turret-btn.selected { border-color: var(--accent); background: #f5a62322; }
+  .turret-btn .t-icon { font-size: 22px; }
+  .turret-btn .t-cost { color: var(--accent); font-weight: bold; font-size: 10px; }
+  .turret-btn .t-name { color: var(--muted); font-size: 8px; letter-spacing: 1px; }
+  #btnRestart {
+    padding: 8px 10px;
+    background: var(--accent2);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-family: inherit;
+    font-size: 9px;
+    cursor: pointer;
+    flex: 0.6;
+    transition: all 0.2s;
+  }
+
+  /* OVERLAYS */
+  .overlay {
+    position: fixed; inset: 0;
+    background: #0f0e17ee;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 100;
+  }
+  .overlay.active { display: flex; }
+  .overlay h2 { font-size: 32px; letter-spacing: 4px; }
+  .overlay p { color: var(--muted); font-size: 14px; }
+  .overlay .big-emoji { font-size: 64px; }
+</style>
+</head>
+<body>
+
+<!-- HERO SELECT -->
+<div id="heroSelect" class="screen active">
+  <h1>⚔️ Tower Defense</h1>
+  <p>Обери свого героя — він стане базою</p>
+  <div class="hero-grid" id="heroGrid"></div>
+  <button class="btn-start" id="btnStartGame" disabled>▶ ПОЧАТИ</button>
+</div>
+
+<!-- GAME -->
+<div id="gameScreen" class="screen">
+  <div id="hud">
+    <div class="hud-stat">
+      <span class="hud-icon">❤️</span>
+      <span class="hud-val red" id="hudLives">10</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-icon">💰</span>
+      <span class="hud-val" id="hudCoins">100</span>
+    </div>
+    <div class="hud-stat">
+      <span class="hud-icon">🌊</span>
+      <span class="hud-val blue" id="hudWave">0</span>
+    </div>
+    <button id="btnWave">▶ ХВИЛЯ</button>
+  </div>
+  <canvas id="gameCanvas"></canvas>
+  <div id="toolbar">
+    <button class="turret-btn" data-type="fast" id="tbFast">
+      <span class="t-icon">🔫</span>
+      <span class="t-name">ШВИДКА</span>
+      <span class="t-cost">💰50</span>
+    </button>
+    <button class="turret-btn" data-type="strong" id="tbStrong">
+      <span class="t-icon">💣</span>
+      <span class="t-name">СИЛЬНА</span>
+      <span class="t-cost">💰80</span>
+    </button>
+    <button class="turret-btn" data-type="slow" id="tbSlow">
+      <span class="t-icon">❄️</span>
+      <span class="t-name">ПОВІЛЬНА</span>
+      <span class="t-cost">💰60</span>
+    </button>
+    <button id="btnRestart">🔄 ЗНОВУ</button>
+  </div>
+</div>
+
+<!-- GAME OVER -->
+<div class="overlay" id="overlayGameOver">
+  <div class="big-emoji">💀</div>
+  <h2 style="color:var(--accent2)">ПРОГРАШ</h2>
+  <p id="goStats">Хвиля: 0</p>
+  <button class="btn-start" id="btnGoRestart">🔄 ЗНОВУ</button>
+</div>
+
+<script>
+// ==================== CONFIG ====================
+const HERO_FILES = ['Tito.png','Smartik.png','Junior.png','Fil.png','Milka.png'];
+const HEROES = [
+  { name: 'Tito',    emoji: '🦁', color: '#f5a623', img: null },
+  { name: 'Smartik', emoji: '🤓', color: '#3498db', img: null },
+  { name: 'Junior',  emoji: '😎', color: '#2ecc71', img: null },
+  { name: 'Fil',     emoji: '🐘', color: '#9b59b6', img: null },
+  { name: 'Milka',   emoji: '🐮', color: '#e8365d', img: null },
+];
+
+// Try to load images from the same folder as the HTML file
+HEROES.forEach((h, i) => {
+  const img = new Image();
+  img.onload = () => { h.img = img; refreshHeroCards(); };
+  img.onerror = () => { h.img = null; }; // fallback to emoji
+  img.src = HERO_FILES[i];
+});
+
+const TURRET_DEFS = {
+  fast:   { cost: 50,  dmg: 10,  range: 110, rate: 600,  color: '#f5a623', bullet: '#ffe066', radius: 10, slowMult: 1   },
+  strong: { cost: 80,  dmg: 35,  range: 140, rate: 1800, color: '#e8365d', bullet: '#ff6b6b', radius: 13, slowMult: 1   },
+  slow:   { cost: 60,  dmg: 5,   range: 120, rate: 900,  color: '#3498db', bullet: '#74b9ff', radius: 11, slowMult: 0.4 },
+};
+
+// ==================== STATE ====================
+let selectedHero = null;
+let G = {}; // game state
+
+// ==================== HERO SELECT ====================
+const heroGrid = document.getElementById('heroGrid');
+const btnStartGame = document.getElementById('btnStartGame');
+
+function buildHeroAvatar(h) {
+  if (h.img) return `<img class="hero-avatar" src="${h.img.src}" style="border-color:${h.color};object-fit:cover" alt="${h.name}">`;
+  return `<div class="hero-avatar" style="background:${h.color}22;font-size:28px">${h.emoji}</div>`;
+}
+
+function refreshHeroCards() {
+  document.querySelectorAll('.hero-card').forEach((card, i) => {
+    const h = HEROES[i];
+    const wasSelected = card.classList.contains('selected');
+    card.innerHTML = `${buildHeroAvatar(h)}<div class="hero-name">${h.name}</div>`;
+    if (wasSelected) card.classList.add('selected');
+  });
+}
+
+HEROES.forEach((h, i) => {
+  const card = document.createElement('div');
+  card.className = 'hero-card';
+  card.innerHTML = `${buildHeroAvatar(h)}<div class="hero-name">${h.name}</div>`;
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.hero-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedHero = h;
+    btnStartGame.disabled = false;
+  });
+  heroGrid.appendChild(card);
+});
+
+btnStartGame.addEventListener('click', () => {
+  if (!selectedHero) return;
+  showScreen('gameScreen');
+  initGame();
+});
+
+document.getElementById('btnGoRestart').addEventListener('click', restartFromOverlay);
+document.getElementById('btnRestart').addEventListener('click', restartFromOverlay);
+
+function restartFromOverlay() {
+  document.getElementById('overlayGameOver').classList.remove('active');
+  showScreen('heroSelect');
+  selectedHero = null;
+  document.querySelectorAll('.hero-card').forEach(c => c.classList.remove('selected'));
+  btnStartGame.disabled = true;
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ==================== CANVAS SETUP ====================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const hud = document.getElementById('hud');
+  const tb = document.getElementById('toolbar');
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+  if (G.initialized) buildGrid();
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+// ==================== GAME INIT ====================
+const CELL = 40; // will be recalculated
+let COLS, ROWS;
+
+// Path defined as column indices per row (simple S-shaped path)
+function buildGrid() {
+  COLS = Math.floor(canvas.width / CELL) || 8;
+  ROWS = Math.floor(canvas.height / CELL) || 12;
+  G.cell = Math.min(Math.floor(canvas.width / 9), 44);
+  G.cols = Math.floor(canvas.width / G.cell);
+  G.rows = Math.floor(canvas.height / G.cell);
+  G.offsetX = Math.floor((canvas.width - G.cols * G.cell) / 2);
+  G.offsetY = Math.floor((canvas.height - G.rows * G.cell) / 2);
+
+  // Build path: list of {col, row} waypoints
+  G.path = buildPath(G.cols, G.rows);
+  // Build set of path cells
+  G.pathSet = new Set();
+  for (let i = 0; i < G.path.length - 1; i++) {
+    const a = G.path[i], b = G.path[i+1];
+    if (a.col === b.col) {
+      const r0 = Math.min(a.row, b.row), r1 = Math.max(a.row, b.row);
+      for (let r = r0; r <= r1; r++) G.pathSet.add(`${a.col},${r}`);
+    } else {
+      const c0 = Math.min(a.col, b.col), c1 = Math.max(a.col, b.col);
+      for (let c = c0; c <= c1; c++) G.pathSet.add(`${c},${a.row}`);
+    }
+  }
+
+  // World coords of path waypoints
+  G.pathPoints = G.path.map(p => cellCenter(p.col, p.row));
+}
+
+function buildPath(cols, rows) {
+  // S-shape through the grid
+  const midC = Math.floor(cols / 2);
+  const q1C = Math.floor(cols * 0.2);
+  const q3C = Math.floor(cols * 0.8);
+  const r1 = Math.floor(rows * 0.25);
+  const r2 = Math.floor(rows * 0.5);
+  const r3 = Math.floor(rows * 0.75);
+
+  return [
+    { col: q1C,  row: 0 },
+    { col: q1C,  row: r1 },
+    { col: q3C,  row: r1 },
+    { col: q3C,  row: r2 },
+    { col: q1C,  row: r2 },
+    { col: q1C,  row: r3 },
+    { col: q3C,  row: r3 },
+    { col: q3C,  row: rows - 1 },
+  ];
+}
+
+function cellCenter(col, row) {
+  return {
+    x: G.offsetX + col * G.cell + G.cell / 2,
+    y: G.offsetY + row * G.cell + G.cell / 2,
+  };
+}
+
+function cellFromXY(x, y) {
+  const col = Math.floor((x - G.offsetX) / G.cell);
+  const row = Math.floor((y - G.offsetY) / G.cell);
+  return { col, row };
+}
+
+function initGame() {
+  G = {
+    initialized: true,
+    lives: 10,
+    coins: 300,
+    wave: 0,
+    waveActive: false,
+    enemies: [],
+    turrets: [],
+    bullets: [],
+    particles: [],
+    floaters: [],
+    selectedTurret: null,
+    spawnQueue: [],
+    spawnTimer: 0,
+    animId: null,
+    lastTime: 0,
+  };
+
+  resizeCanvas();
+  buildGrid();
+  updateHUD();
+  bindToolbar();
+  bindCanvas();
+  document.getElementById('btnWave').disabled = false;
+  document.getElementById('btnWave').onclick = startWave;
+
+  if (G.animId) cancelAnimationFrame(G.animId);
+  G.lastTime = performance.now();
+  loop(G.lastTime);
+}
+
+// ==================== HUD ====================
+function updateHUD() {
+  document.getElementById('hudLives').textContent = G.lives;
+  document.getElementById('hudCoins').textContent = G.coins;
+  document.getElementById('hudWave').textContent = G.wave;
+}
+
+// ==================== TOOLBAR ====================
+function bindToolbar() {
+  document.querySelectorAll('.turret-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.type;
+      if (G.selectedTurret === type) {
+        G.selectedTurret = null;
+        btn.classList.remove('selected');
+      } else {
+        document.querySelectorAll('.turret-btn').forEach(b => b.classList.remove('selected'));
+        G.selectedTurret = type;
+        btn.classList.add('selected');
+      }
+    });
+  });
+}
+
+// ==================== CANVAS INPUT ====================
+function bindCanvas() {
+  canvas.addEventListener('click', onCanvasClick);
+}
+
+function onCanvasClick(e) {
+  if (!G.selectedTurret) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+  const { col, row } = cellFromXY(x, y);
+  if (col < 0 || row < 0 || col >= G.cols || row >= G.rows) return;
+  if (G.pathSet.has(`${col},${row}`)) return; // on path
+  // check not already has turret
+  if (G.turrets.find(t => t.col === col && t.row === row)) return;
+  // check adjacent to path
+  const adj = isAdjacentToPath(col, row);
+  if (!adj) return;
+  const def = TURRET_DEFS[G.selectedTurret];
+  if (G.coins < def.cost) {
+    spawnFloater(x, y, '💸 Мало монет!', '#e8365d');
+    return;
+  }
+  G.coins -= def.cost;
+  const center = cellCenter(col, row);
+  G.turrets.push({
+    col, row,
+    x: center.x, y: center.y,
+    type: G.selectedTurret,
+    ...def,
+    cooldown: 0,
+    angle: 0,
+  });
+  updateHUD();
+}
+
+function isAdjacentToPath(col, row) {
+  const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+  return dirs.some(([dc, dr]) => G.pathSet.has(`${col+dc},${row+dr}`));
+}
+
+// ==================== WAVES ====================
+function startWave() {
+  if (G.waveActive) return;
+  G.wave++;
+  G.waveActive = true;
+  document.getElementById('btnWave').disabled = true;
+  updateHUD();
+
+  const count = 5 + G.wave * 3;
+  const hp = 60 + G.wave * 25;
+  const speed = 55 + G.wave * 4;
+  G.spawnQueue = [];
+  for (let i = 0; i < count; i++) {
+    G.spawnQueue.push({ hp, speed, delay: i * 900 });
+  }
+  G.spawnTimer = 0;
+}
+
+function spawnEnemy(hp, speed) {
+  const hero = HEROES[Math.floor(Math.random() * HEROES.length)];
+  const start = G.pathPoints[0];
+  G.enemies.push({
+    x: start.x, y: start.y,
+    hp, maxHp: hp,
+    speed,
+    baseSpeed: speed,
+    slowTimer: 0,
+    pathIndex: 0,
+    progress: 0,
+    hero,
+    radius: 14,
+    alpha: 1,
+  });
+}
+
+// ==================== MAIN LOOP ====================
+function loop(ts) {
+  const dt = Math.min((ts - G.lastTime) / 1000, 0.05);
+  G.lastTime = ts;
+
+  update(dt, ts);
+  draw();
+
+  G.animId = requestAnimationFrame(loop);
+}
+
+function update(dt, ts) {
+  if (!G.initialized) return;
+
+  // Spawn
+  if (G.waveActive && G.spawnQueue.length > 0) {
+    G.spawnTimer += dt * 1000;
+    while (G.spawnQueue.length > 0 && G.spawnQueue[0].delay <= G.spawnTimer) {
+      const e = G.spawnQueue.shift();
+      spawnEnemy(e.hp, e.speed);
+    }
+  }
+
+  // Enemies
+  for (let i = G.enemies.length - 1; i >= 0; i--) {
+    const e = G.enemies[i];
+    if (e.slowTimer > 0) e.slowTimer -= dt;
+    const spd = e.slowTimer > 0 ? e.baseSpeed * e.slowMult : e.baseSpeed;
+
+    // Move towards next waypoint
+    if (e.pathIndex < G.pathPoints.length - 1) {
+      const target = G.pathPoints[e.pathIndex + 1];
+      const dx = target.x - e.x, dy = target.y - e.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const step = spd * dt;
+      if (step >= dist) {
+        e.x = target.x; e.y = target.y;
+        e.pathIndex++;
+      } else {
+        e.x += (dx / dist) * step;
+        e.y += (dy / dist) * step;
+      }
+    } else {
+      // Reached base
+      G.lives = Math.max(0, G.lives - 1);
+      spawnParticles(e.x, e.y, '#e8365d', 8);
+      G.enemies.splice(i, 1);
+      updateHUD();
+      if (G.lives <= 0) gameOver();
+      continue;
+    }
+
+    if (e.hp <= 0) {
+      const reward = Math.floor(10 + G.wave * 2);
+      G.coins += reward;
+      spawnParticles(e.x, e.y, e.hero.color, 10);
+      spawnFloater(e.x, e.y, `+${reward}💰`, '#f5a623');
+      G.enemies.splice(i, 1);
+      updateHUD();
+      continue;
+    }
+  }
+
+  // Check wave done
+  if (G.waveActive && G.spawnQueue.length === 0 && G.enemies.length === 0) {
+    G.waveActive = false;
+    document.getElementById('btnWave').disabled = false;
+    const bonus = G.wave * 15;
+    G.coins += bonus;
+    spawnFloater(canvas.width/2, canvas.height/2, `Хвилю пройдено! +${bonus}💰`, '#2ecc71');
+    updateHUD();
+  }
+
+  // Turrets
+  G.turrets.forEach(t => {
+    t.cooldown -= dt * 1000;
+    if (t.cooldown > 0) return;
+
+    // Find nearest enemy in range
+    let target = null, minDist = Infinity;
+    G.enemies.forEach(e => {
+      const dx = e.x - t.x, dy = e.y - t.y;
+      const d = Math.sqrt(dx*dx + dy*dy);
+      if (d < t.range && d < minDist) { minDist = d; target = e; }
+    });
+    if (!target) return;
+
+    t.angle = Math.atan2(target.y - t.y, target.x - t.x);
+    t.cooldown = t.rate;
+    G.bullets.push({
+      x: t.x, y: t.y,
+      tx: target, // track target
+      speed: 280,
+      dmg: t.dmg,
+      color: t.bullet,
+      slowMult: t.slowMult,
+      radius: 4,
+      dead: false,
+    });
+  });
+
+  // Bullets
+  for (let i = G.bullets.length - 1; i >= 0; i--) {
+    const b = G.bullets[i];
+    if (b.dead || !G.enemies.includes(b.tx)) { G.bullets.splice(i, 1); continue; }
+    const dx = b.tx.x - b.x, dy = b.tx.y - b.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const step = b.speed * dt;
+    if (step >= dist) {
+      b.tx.hp -= b.dmg;
+      if (b.slowMult < 1) { b.tx.slowTimer = 2; b.tx.slowMult = b.slowMult; }
+      spawnParticles(b.tx.x, b.tx.y, b.color, 3);
+      G.bullets.splice(i, 1);
+    } else {
+      b.x += (dx / dist) * step;
+      b.y += (dy / dist) * step;
+    }
+  }
+
+  // Particles
+  for (let i = G.particles.length - 1; i >= 0; i--) {
+    const p = G.particles[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 200 * dt;
+    p.life -= dt;
+    if (p.life <= 0) G.particles.splice(i, 1);
+  }
+
+  // Floaters
+  for (let i = G.floaters.length - 1; i >= 0; i--) {
+    const f = G.floaters[i];
+    f.y -= 40 * dt;
+    f.life -= dt;
+    if (f.life <= 0) G.floaters.splice(i, 1);
+  }
+}
+
+function spawnParticles(x, y, color, n) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = 80 + Math.random() * 120;
+    G.particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: 0.4 + Math.random()*0.3, color, radius: 2+Math.random()*3 });
+  }
+}
+
+function spawnFloater(x, y, text, color) {
+  G.floaters.push({ x, y, text, color, life: 1.4, maxLife: 1.4 });
+}
+
+// ==================== DRAW ====================
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  drawGrid();
+  drawPath();
+  drawBase();
+  drawTurrets();
+  drawEnemies();
+  drawBullets();
+  drawParticles();
+  drawFloaters();
+  drawRangePreview();
+}
+
+function drawGrid() {
+  ctx.strokeStyle = '#ffffff08';
+  ctx.lineWidth = 0.5;
+  for (let c = 0; c <= G.cols; c++) {
+    const x = G.offsetX + c * G.cell;
+    ctx.beginPath(); ctx.moveTo(x, G.offsetY); ctx.lineTo(x, G.offsetY + G.rows * G.cell); ctx.stroke();
+  }
+  for (let r = 0; r <= G.rows; r++) {
+    const y = G.offsetY + r * G.cell;
+    ctx.beginPath(); ctx.moveTo(G.offsetX, y); ctx.lineTo(G.offsetX + G.cols * G.cell, y); ctx.stroke();
+  }
+
+  // Highlight placeable cells
+  if (G.selectedTurret) {
+    ctx.fillStyle = '#ffffff06';
+    for (let c = 0; c < G.cols; c++) {
+      for (let r = 0; r < G.rows; r++) {
+        if (!G.pathSet.has(`${c},${r}`) && isAdjacentToPath(c, r) && !G.turrets.find(t=>t.col===c&&t.row===r)) {
+          ctx.fillRect(G.offsetX + c * G.cell, G.offsetY + r * G.cell, G.cell, G.cell);
+        }
+      }
+    }
+  }
+}
+
+function drawPath() {
+  if (!G.pathPoints || G.pathPoints.length < 2) return;
+  // Draw path cells
+  ctx.fillStyle = '#2d2a3e';
+  G.pathSet.forEach(key => {
+    const [c, r] = key.split(',').map(Number);
+    ctx.fillRect(G.offsetX + c * G.cell, G.offsetY + r * G.cell, G.cell, G.cell);
+  });
+
+  // Draw path line
+  ctx.strokeStyle = '#ffffff18';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 6]);
+  ctx.beginPath();
+  G.pathPoints.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Arrow at start
+  const start = G.pathPoints[0];
+  ctx.fillStyle = '#2ecc7188';
+  ctx.font = '14px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('▼', start.x, start.y + 5);
+}
+
+function drawBase() {
+  if (!G.pathPoints) return;
+  const end = G.pathPoints[G.pathPoints.length - 1];
+  const h = selectedHero;
+
+  // Glow
+  const grad = ctx.createRadialGradient(end.x, end.y, 4, end.x, end.y, 36);
+  grad.addColorStop(0, h.color + '66');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(end.x, end.y, 36, 0, Math.PI*2);
+  ctx.fill();
+
+  // Circle
+  ctx.fillStyle = h.color + '33';
+  ctx.strokeStyle = h.color;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(end.x, end.y, 20, 0, Math.PI*2);
+  ctx.fill(); ctx.stroke();
+
+  // Emoji or photo
+  if (h.img) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(end.x, end.y, 18, 0, Math.PI*2);
+    ctx.clip();
+    ctx.drawImage(h.img, end.x - 18, end.y - 18, 36, 36);
+    ctx.restore();
+  } else {
+    ctx.font = '20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.fillText(h.emoji, end.x, end.y);
+  }
+
+  // Lives bar
+  ctx.fillStyle = '#ffffff22';
+  ctx.fillRect(end.x - 24, end.y + 26, 48, 5);
+  ctx.fillStyle = G.lives > 3 ? '#2ecc71' : '#e8365d';
+  ctx.fillRect(end.x - 24, end.y + 26, 48 * (G.lives / 10), 5);
+  ctx.textBaseline = 'alphabetic';
+}
+
+function drawTurrets() {
+  G.turrets.forEach(t => {
+    const def = TURRET_DEFS[t.type];
+
+    // Shadow
+    ctx.fillStyle = '#00000044';
+    ctx.beginPath();
+    ctx.ellipse(t.x, t.y + def.radius - 2, def.radius * 0.8, def.radius * 0.3, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Body
+    const grad = ctx.createRadialGradient(t.x - 3, t.y - 3, 2, t.x, t.y, def.radius + 2);
+    grad.addColorStop(0, def.color + 'ff');
+    grad.addColorStop(1, def.color + '88');
+    ctx.fillStyle = grad;
+    ctx.strokeStyle = def.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, def.radius, 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+
+    // Barrel
+    ctx.strokeStyle = def.color;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(t.x, t.y);
+    ctx.lineTo(t.x + Math.cos(t.angle) * (def.radius + 7), t.y + Math.sin(t.angle) * (def.radius + 7));
+    ctx.stroke();
+
+    // Icon
+    const icons = { fast: '🔫', strong: '💣', slow: '❄️' };
+    ctx.font = `${def.radius}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(icons[t.type], t.x, t.y);
+    ctx.textBaseline = 'alphabetic';
+  });
+}
+
+function drawRangePreview() {
+  if (!G.selectedTurret) return;
+  // Show range on hover? On mobile, show around selected turret
+  // Show ranges of all turrets softly
+  G.turrets.forEach(t => {
+    ctx.strokeStyle = TURRET_DEFS[t.type].color + '22';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3,3]);
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, t.range, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+}
+
+function drawEnemies() {
+  G.enemies.forEach(e => {
+    // Shadow
+    ctx.fillStyle = '#00000044';
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y + e.radius - 2, e.radius * 0.8, e.radius * 0.3, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    // Body circle
+    const grad = ctx.createRadialGradient(e.x - 4, e.y - 4, 2, e.x, e.y, e.radius + 2);
+    grad.addColorStop(0, e.hero.color + 'ff');
+    grad.addColorStop(1, e.hero.color + '66');
+    ctx.fillStyle = grad;
+    ctx.strokeStyle = e.slowTimer > 0 ? '#74b9ff' : e.hero.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.radius, 0, Math.PI*2);
+    ctx.fill(); ctx.stroke();
+
+    // Emoji or photo
+    if (e.hero.img) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius, 0, Math.PI*2);
+      ctx.clip();
+      ctx.drawImage(e.hero.img, e.x - e.radius, e.y - e.radius, e.radius * 2, e.radius * 2);
+      ctx.restore();
+    } else {
+      ctx.font = `${e.radius}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(e.hero.emoji, e.x, e.y);
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    // HP bar
+    const bw = e.radius * 2 + 4;
+    const bh = 4;
+    const bx = e.x - bw/2, by = e.y - e.radius - 8;
+    ctx.fillStyle = '#00000066';
+    ctx.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
+    ctx.fillStyle = '#e8365d';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.fillStyle = '#2ecc71';
+    ctx.fillRect(bx, by, bw * (e.hp / e.maxHp), bh);
+
+    // Slow indicator
+    if (e.slowTimer > 0) {
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('❄️', e.x, e.y - e.radius - 10);
+    }
+  });
+}
+
+function drawBullets() {
+  G.bullets.forEach(b => {
+    const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, b.radius + 2);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.4, b.color);
+    grad.addColorStop(1, b.color + '44');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.radius, 0, Math.PI*2);
+    ctx.fill();
+  });
+}
+
+function drawParticles() {
+  G.particles.forEach(p => {
+    ctx.globalAlpha = Math.max(0, p.life / 0.5);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius * (p.life / 0.5), 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+function drawFloaters() {
+  G.floaters.forEach(f => {
+    const alpha = Math.min(1, f.life / f.maxLife * 2);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = f.color;
+    ctx.font = 'bold 13px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.shadowColor = f.color;
+    ctx.shadowBlur = 8;
+    ctx.fillText(f.text, f.x, f.y);
+    ctx.shadowBlur = 0;
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ==================== GAME OVER ====================
+function gameOver() {
+  G.waveActive = false;
+  G.initialized = false;
+  cancelAnimationFrame(G.animId);
+  document.getElementById('goStats').textContent = `Хвиля: ${G.wave} | Монет зароблено за гру: ${G.coins}`;
+  document.getElementById('overlayGameOver').classList.add('active');
+}
+</script>
+</body>
+</html>
